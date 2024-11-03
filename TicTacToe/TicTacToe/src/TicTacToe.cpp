@@ -1,39 +1,10 @@
 #include "TicTacToe.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-#include <GLFW/glfw3.h>
-
 void TicTacToe::DrawBackground()
 {
 	m_TextureShader.use();
-	//load texture
-	unsigned int texture;
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	
-	int width, height, channels;
-	stbi_set_flip_vertically_on_load(true);
-	unsigned char* data = stbi_load("../Checkerboard.png", &width, &height, &channels, 0);
-	if (data)
-	{
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-		glGenerateMipmap(GL_TEXTURE_2D);
-	}
-	else
-	{
-		std::cout << "Failed to load texture" << std::endl;
-	}
-	stbi_image_free(data);
-	
-	glBindTexture(GL_TEXTURE_2D, texture);
+	glBindTexture(GL_TEXTURE_2D, m_Texture);
 
 	m_TextureShader.setInt("u_Texture", 0);
 
@@ -73,16 +44,19 @@ void TicTacToe::DrawBackground()
 
 void TicTacToe::DrawBoard()
 {
-	m_Shader.use();
-	DrawGrid();
+	if (state == GameState::GAME_PLAY)
+	{
+		m_Shader.use();
+		DrawGrid();
 
-	for (int row = 0; row < BOARD_SIZE; row++) {
-		for (int col = 0; col < BOARD_SIZE; col++) {
-			if (board[row][col] == PLAYER_X) {
-				DrawX(row, col);
-			}
-			else if (board[row][col] == PLAYER_O) {
-				DrawO(row, col);
+		for (int row = 0; row < BOARD_SIZE; row++) {
+			for (int col = 0; col < BOARD_SIZE; col++) {
+				if (board[row][col] == PLAYER_X) {
+					DrawX(row, col);
+				}
+				else if (board[row][col] == PLAYER_O) {
+					DrawO(row, col);
+				}
 			}
 		}
 	}
@@ -90,69 +64,101 @@ void TicTacToe::DrawBoard()
 
 void TicTacToe::HandleClick(int x, int y)
 {
-	int row = y / (WINDOW_HEIGHT / BOARD_SIZE);
-	int col = x / (WINDOW_WIDTH / BOARD_SIZE);
+	if (state == GameState::GAME_PLAY)
+	{
+		int row = y / (WINDOW_HEIGHT / BOARD_SIZE);
+		int col = x / (WINDOW_WIDTH / BOARD_SIZE);
 
-	if (board[row][col] == NONE) {
-		board[row][col] = currentPlayer;
-		if (CheckWin(currentPlayer)) {
-			std::cout << "Player" << (currentPlayer == PLAYER_X ? "X" : "O") << " wins!" << std::endl;
-			if (currentPlayer == PLAYER_X) {
-				DrawX(row, col);
-				scoreX++;
+		if (board[row][col] == NONE) {
+			board[row][col] = currentPlayer;
+			if (CheckWin(currentPlayer)) {
+				std::cout << "Player" << (currentPlayer == PLAYER_X ? "X" : "O") << " wins!" << std::endl;
+				if (currentPlayer == PLAYER_X) {
+					DrawX(row, col);
+					scoreX++;
+				}
+				else {
+					DrawO(row, col);
+					scoreO++;
+				}
+				Reset();
+			}
+			else if (IsBoardFull()) {
+				std::cout << "Ends in a draw!" << std::endl;
+				Reset();
 			}
 			else {
-				DrawO(row, col);
-				scoreO++;
-			}
-			Reset();
-		}
-		else if (IsBoardFull()) {
-			std::cout << "Ends in a draw!" << std::endl;
-			Reset();
-		}
-		else {
-			SwitchPlayer();
-			AiMove();
-		}
-	}
-}
-
-void TicTacToe::AiMove()
-{
-	if (currentPlayer == PLAYER_O) {
-		int bestVal = -1000;
-		int bestRow = -1, bestCol = -1;
-
-		for (int row = 0; row < BOARD_SIZE; row++) {
-			for (int col = 0; col < BOARD_SIZE; col++) {
-				if (board[row][col] == NONE) {
-					board[row][col] = PLAYER_O;
-					int moveVal = minimax(false);
-					board[row][col] = NONE;
-					if (moveVal > bestVal) {
-						bestRow = row;
-						bestCol = col;
-						bestVal = moveVal;
+				SwitchPlayer();
+				if (chooseAI) {
+					AiMove();
+					if (CheckWin(currentPlayer)) {
+						std::cout << "Player O wins!" << std::endl;
+						++scoreO;
+						Reset();
 					}
+					else if (IsBoardFull()) {
+						std::cout << "It's a draw!" << std::endl;
+						Reset();
+					}
+					else SwitchPlayer();
 				}
 			}
 		}
+	}
+}
+/*
+if (CheckWin(currentPlayer)) {
+					std::cout << "Player O wins!" << std::endl;
+					++scoreO;
+					Reset();
+				}
+				else if (IsBoardFull()) {
+					std::cout << "It's a draw!" << std::endl;
+					Reset();
+				}
+				else SwitchPlayer();
+*/
+void TicTacToe::AiMove()
+{
+	if (currentPlayer == PLAYER_O) {
+		if (aiMode == AIMode::EASY)
+		{
+			std::vector<std::pair<int, int>> availableMoves;
+			for (int row = 0; row < BOARD_SIZE; ++row) {
+				for (int col = 0; col < BOARD_SIZE; ++col) {
+					if (board[row][col] == NONE) {
+						availableMoves.emplace_back(row, col);
+					}
+				}
+			}
 
-		board[bestRow][bestCol] = currentPlayer;
+			if (!availableMoves.empty()) {
+				auto move = availableMoves[std::rand() % availableMoves.size()];
+				board[move.first][move.second] = currentPlayer;
+			}
+		}
+		else if (aiMode == AIMode::HARD)
+		{
+			int bestVal = -1000;
+			int bestRow = -1, bestCol = -1;
 
-		if (CheckWin(currentPlayer)) {
-			DrawO(bestVal, bestCol);
-			std::cout << "Player O wins!" << std::endl;
-			scoreO++;
-			Reset();
+			for (int row = 0; row < BOARD_SIZE; row++) {
+				for (int col = 0; col < BOARD_SIZE; col++) {
+					if (board[row][col] == NONE) {
+						board[row][col] = PLAYER_O;
+						int moveVal = minimax(false);
+						board[row][col] = NONE;
+						if (moveVal > bestVal) {
+							bestRow = row;
+							bestCol = col;
+							bestVal = moveVal;
+						}
+					}
+				}
+			}
+
+			board[bestRow][bestCol] = currentPlayer;
 		}
-		else if (IsBoardFull()) {
-			DrawO(bestVal, bestCol);
-			std::cout << "Ends in a draw!" << std::endl;
-			Reset();
-		}
-		else SwitchPlayer();
 	}
 }
 
@@ -170,10 +176,36 @@ bool TicTacToe::CheckWin(Player player)
 
 void TicTacToe::RenderScores()
 {
-	ImGui::Begin("Scores"); 
+	ImGui::Begin("Scores", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+	ImGui::SetWindowSize(ImVec2(200, 100), ImGuiCond_FirstUseEver);
+
 	ImGui::Text("Player X: %d", scoreX);
 	ImGui::Text("Player O: %d", scoreO);
+
+	if (ImGui::Button("Return MainMenu", ImVec2(200, 50))) {
+		RestartGame();
+	}
 	ImGui::End();
+}
+
+void TicTacToe::RenderUI()
+{
+	switch (state) {
+		case GameState::MAIN_MENU:
+			DrawMainMenu();
+			break;
+		case GameState::GAME_PLAY:
+			RenderScores();
+			break;
+	}
+}
+
+void TicTacToe::RestartGame()
+{
+	Reset();
+	scoreX = 0;
+	scoreO = 0;
+	state = GameState::MAIN_MENU;
 }
 
 void TicTacToe::Reset()
@@ -350,6 +382,56 @@ int TicTacToe::evaluate()
 	return 0;
 }
 
+void TicTacToe::DrawMainMenu()
+{
+	ImGui::Begin("Tic Tac Toe Menu", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+	ImGui::Text("Welcome to Tic Tac Toe!");
+	ImGui::Spacing();
+
+	if (ImGui::Button("Start Two-Player Game", ImVec2(200, 50))) {
+		chooseAI = false;
+		RestartGame();
+		state = GameState::GAME_PLAY;
+	}
+
+	if (ImGui::Button("Play vs AI", ImVec2(200, 50))) {
+		state = GameState::MAIN_MENU;
+		chooseAI = true;
+	}
+
+	if (state == GameState::MAIN_MENU && ImGui::CollapsingHeader("Select AI Difficulty")) {
+		if (ImGui::RadioButton("Easy", aiMode == AIMode::EASY)) aiMode = AIMode::EASY;
+		if (ImGui::RadioButton("Hard", aiMode == AIMode::HARD)) aiMode = AIMode::HARD;
+
+		if (ImGui::Button("Start AI Game", ImVec2(200, 50))) {
+			RestartGame();
+			state = GameState::GAME_PLAY;
+		}
+	}
+
+	ImGui::End();
+}
+/*
+void TicTacToe::DrawGameOverScreen()
+{
+	ImGui::Begin("Game Over", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+	ImGui::SetWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
+	if (CheckWin(currentPlayer)) {
+		ImGui::Text("Player %c Wins!", currentPlayer == Player::PLAYER_X ? 'X' : 'O');
+	}
+	else {
+		ImGui::Text("Ends in a Draw!");
+	}
+
+	if (ImGui::Button("Return", ImVec2(150, 50))) {
+		Reset();
+		state = GameState::MAIN_MENU;
+	}
+
+	ImGui::End();
+}
+*/
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
 	WINDOW_WIDTH = width;
@@ -399,21 +481,16 @@ int main()
 		return -1;
 	}
 
-	//Setup ImGui
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 330");
-	ImGui::StyleColorsDark();
-
-
 	//Setup game
 	TicTacToe game;
 	glfwSetWindowUserPointer(window, &game);
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 	glfwSetMouseButtonCallback(window, mouseButtonCallback);
 
+	//Setup ImGui
+	game.ImGuilayer.OnAttach();
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 410");
 	//Main loop
 	while (!glfwWindowShouldClose(window))
 	{
@@ -422,23 +499,19 @@ int main()
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		ImGui_ImplOpenGL3_NewFrame();
-		ImGui_ImplGlfw_NewFrame();
-		ImGui::NewFrame();
+		game.ImGuilayer.Begin();
 
 		game.DrawBackground();
 		game.DrawBoard();
-		game.RenderScores();
+		game.RenderUI();
 
-		ImGui::Render();
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+		game.ImGuilayer.End();
 
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 	}
 
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui::DestroyContext();
+	game.ImGuilayer.OnDetach();
 
 	glfwDestroyWindow(window);
 	glfwTerminate();

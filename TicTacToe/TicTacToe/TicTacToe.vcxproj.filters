@@ -42,6 +42,9 @@
     <ClCompile Include="ImGui\imgui_widgets.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\ImGuiLayer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\TicTacToe.h">
@@ -78,6 +81,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="ImGui\imgui_impl_opengl3_loader.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ImGuiLayer.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
