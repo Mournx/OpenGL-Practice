@@ -1,0 +1,8 @@
+# Directories
+TicTacToe/.vs/
+TicTacToe//bin/
+TicTacToe/bin-int/
+
+# Files
+*.user
+imgui.ini
